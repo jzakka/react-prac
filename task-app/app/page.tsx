@@ -1,7 +1,7 @@
 "use client"
 
 import Image from "next/image";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, memo } from "react";
 
 export default function Home() {
   const [tasks, setTasks] = useState([
@@ -12,15 +12,15 @@ export default function Home() {
 
   const [inputTitle, setInputTitle] = useState("");
 
-  const toggleTask = (id: number) => {
+  const toggleTask = useCallback((id: number) => {
     setTasks(prevTasks => prevTasks.map(task => task.id === id ? { id: task.id, title: task.title, completed: !task.completed } : task));
 
     console.log("クリックされた");
-  };
+  }, [])
 
-  const deleteTask = (id: number) => {
+  const deleteTask = useCallback((id: number) => {
     setTasks(prevTasks => prevTasks.filter(task => id !== task.id));
-  };
+  }, []);
 
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -115,9 +115,9 @@ export default function Home() {
 
           {
             visibleTasks.map(task => (
-              <TaskItem key={task.id} title={task.title}
-                completed={task.completed} onToggle={() => toggleTask(task.id)}
-                onDelete={() => deleteTask(task.id)}
+              <TaskItem key={task.id} id={task.id} title={task.title}
+                completed={task.completed} onToggle={toggleTask}
+                onDelete={deleteTask}
               />
             ))
           }
@@ -172,15 +172,17 @@ export default function Home() {
   );
 }
 
-function TaskItem(props: { title: string, completed: boolean, onToggle: () => void, onDelete: () => void }) {
+const TaskItem = memo(function TaskItem(props: { id: number, title: string, completed: boolean, onToggle: (id: number) => void, onDelete: (id: number) => void }) {
+  console.log("TaskItemのレンダー", props.id);
+
   return (
     <div>
       <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
         {props.title} {props.completed ? "完了" : "未完了"}
       </p>
 
-      <button onClick={props.onToggle}>ボタン</button>
-      <button onClick={props.onDelete}>削除</button>
+      <button onClick={() => props.onToggle(props.id)}>ボタン</button>
+      <button onClick={() => props.onDelete(props.id)}>削除</button>
     </div>
   )
-}
+})
