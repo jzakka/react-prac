@@ -1,6 +1,77 @@
+"use client"
+
 import Image from "next/image";
+import { parse } from "path";
+import { useEffect, useState } from "react";
 
 export default function Home() {
+  const [projects, setProjects] = useState<{ id: number, name: string, durations: { start: string, end: string | null }[], ongoing: boolean }[]>([
+    {
+      id: 1, name: "music", durations: [
+        { start: "2026-10-01T20:00:01", end: "2026-10-01T21:00:03" },
+        { start: "2026-10-02T20:00:01", end: "2026-10-02T21:00:03" },
+        { start: "2026-10-02T22:30:01", end: "2026-10-02T23:00:50" },
+      ], ongoing: false
+    },
+    {
+      id: 2, name: "music input", durations: [
+        { start: "2026-10-01T20:00:01", end: "2026-10-01T21:00:03" },
+      ], ongoing: false
+    },
+  ]);
+
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("projects");
+      if (!saved) {
+        return;
+      }
+
+      const parsed = JSON.parse(saved);
+
+      // TODO: data validation
+
+      setProjects(parsed);
+    } catch (e) {
+      console.log("invalid data: ", e)
+    } finally {
+      setIsLoaded(true)
+    }
+  }, []);
+
+  const [now, setNow] = useState(new Date());
+
+  setInterval(() => {
+    setNow(new Date());
+  }, 1000);
+
+
+  useEffect(() => {
+    if (!isLoaded) {
+      return;
+    }
+    localStorage.setItem("projects", JSON.stringify(projects));
+  }, [projects, isLoaded]);
+
+  const starter = (id: number) => {
+    const started = projects.map(prj => prj.id === id ? {
+      id: prj.id, name: prj.name, durations: [...prj.durations, { start: new Date().toISOString().replace("/\.\d{3}Z$/", ""), end: null }], ongoing: true,
+    } : prj);
+    setProjects(started);
+  };
+  const stopper = (id: number) => {
+    const stopped = projects.map(prj => {
+      if (prj.id === id && prj.durations.length > 0) {
+        prj.durations[prj.durations.length - 1].end = new Date().toISOString().replace("/\.\d{3}Z$/", "");
+        prj.ongoing = false;
+      }
+      return prj;
+    })
+    setProjects(stopped);
+  };
+
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
@@ -13,30 +84,16 @@ export default function Home() {
           priority
         />
         <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+          {
+            projects.map(prj => {
+              return (
+                <Project
+                  key={prj.id} id={prj.id} name={prj.name} durations={prj.durations} ongoing={prj.ongoing}
+                  starter={starter} stopper={stopper} now={now}
+                />
+              )
+            })
+          }
         </div>
         <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
           <a
@@ -66,4 +123,51 @@ export default function Home() {
       </main>
     </div>
   );
+}
+
+function Project(props: {
+  id: number,
+  name: string,
+  durations: { start: string, end: string | null }[],
+  ongoing: boolean,
+  starter: (id: number) => void, stopper: (id: number) => void,
+  now: Date,
+}) {
+  return (
+    <div>
+      <p>Task: {props.name}</p>
+      <p>Total: {showTotalTime(calcTotalTime(props.durations, props.now))}</p>
+      <Toggle key={props.id} id={props.id} ongoing={props.ongoing} starter={props.starter} stopper={props.stopper} />
+    </div>
+  )
+}
+
+function Toggle(props: { id: number, ongoing: boolean, starter: (id: number) => void, stopper: (id: number) => void }) {
+  if (props.ongoing) {
+    return (
+      <button onClick={() => props.stopper(props.id)}>STOP</button>
+    );
+  }
+  return (
+    <button onClick={() => props.starter(props.id)}>START</button>
+  );
+}
+
+function calcTotalTime(durations: { start: string, end: string | null }[], now: Date): number {
+  let totalTime: number = 0;
+  for (const duration of durations) {
+    const startTime = new Date(duration.start).getTime();
+    const endTime = duration.end ? new Date(duration.end).getTime() : now.getTime();
+
+    totalTime += endTime - startTime;
+  }
+  return totalTime;
+}
+
+function showTotalTime(milliseconds: number) {
+  const seconds = milliseconds / 1000;
+  const hr = Math.floor(seconds / 3600);
+  const minute = Math.floor((seconds - 3600 * hr) / 60);
+  const second = Math.floor(seconds % 60);
+  return `${hr} hr ${minute} m ${second} s`;
 }
