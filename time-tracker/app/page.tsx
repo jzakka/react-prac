@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { parse } from "path";
 import { useEffect, useState } from "react";
+import { start } from "repl";
 
 export default function Home() {
   const [projects, setProjects] = useState<{ id: number, name: string, durations: { start: string, end: string | null }[], ongoing: boolean }[]>([
@@ -72,6 +73,13 @@ export default function Home() {
     setProjects(stopped);
   };
 
+  const [inputProject, setInputProject] = useState("");
+
+  const deleteProject = (id: number) => {
+    const deletedProjects = projects.filter(pr => pr.id != id);
+    setProjects(deletedProjects);
+  };
+
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
       <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
@@ -89,12 +97,32 @@ export default function Home() {
               return (
                 <Project
                   key={prj.id} id={prj.id} name={prj.name} durations={prj.durations} ongoing={prj.ongoing}
-                  starter={starter} stopper={stopper} now={now}
+                  starter={starter} stopper={stopper} now={now} deleter={deleteProject}
                 />
               )
             })
           }
         </div>
+        <form onSubmit={event => {
+          event.preventDefault();
+
+          const projectName = inputProject.trim();
+
+          if (projectName) {
+            const nextID = Math.max(-1, ...projects.map(project => project.id)) + 1;
+              setProjects([...projects, {
+              id: nextID,
+              name: inputProject,
+              durations: [],
+              ongoing: false,
+            }]);
+            setInputProject("");
+          }
+        }}>
+          <label htmlFor="projectName">Project</label>
+          <input id="projectName" type="text" value={inputProject} onChange={event => setInputProject(event.currentTarget.value)}/>
+          <button type="submit">create project</button>
+        </form>
         <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
           <a
             className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
@@ -130,7 +158,7 @@ function Project(props: {
   name: string,
   durations: { start: string, end: string | null }[],
   ongoing: boolean,
-  starter: (id: number) => void, stopper: (id: number) => void,
+  starter: (id: number) => void, stopper: (id: number) => void, deleter: (id: number) => void,
   now: Date,
 }) {
   return (
@@ -138,6 +166,7 @@ function Project(props: {
       <p>Task: {props.name}</p>
       <p>Total: {showTotalTime(calcTotalTime(props.durations, props.now))}</p>
       <Toggle key={props.id} id={props.id} ongoing={props.ongoing} starter={props.starter} stopper={props.stopper} />
+      <button onClick={()=>props.deleter(props.id)}>delete</button>
     </div>
   )
 }
