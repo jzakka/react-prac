@@ -6,18 +6,18 @@ import { useEffect, useState } from "react";
 import { start } from "repl";
 
 export default function Home() {
-  const [projects, setProjects] = useState<{ id: number, name: string, durations: { start: string, end: string | null }[], ongoing: boolean }[]>([
+  const [projects, setProjects] = useState<{ id: number, name: string, durations: { start: string, end: string | null }[]}[]>([
     {
       id: 1, name: "music", durations: [
         { start: "2026-10-01T20:00:01", end: "2026-10-01T21:00:03" },
         { start: "2026-10-02T20:00:01", end: "2026-10-02T21:00:03" },
         { start: "2026-10-02T22:30:01", end: "2026-10-02T23:00:50" },
-      ], ongoing: false
+      ]
     },
     {
       id: 2, name: "music input", durations: [
         { start: "2026-10-01T20:00:01", end: "2026-10-01T21:00:03" },
-      ], ongoing: false
+      ]
     },
   ]);
 
@@ -48,7 +48,6 @@ export default function Home() {
     setNow(new Date());
   }, 1000);
 
-
   useEffect(() => {
     if (!isLoaded) {
       return;
@@ -58,7 +57,7 @@ export default function Home() {
 
   const starter = (id: number) => {
     const started = projects.map(prj => prj.id === id ? {
-      id: prj.id, name: prj.name, durations: [...prj.durations, { start: new Date().toISOString().replace("/\.\d{3}Z$/", ""), end: null }], ongoing: true,
+      id: prj.id, name: prj.name, durations: [...prj.durations, { start: new Date().toISOString().replace("/\.\d{3}Z$/", ""), end: null }],
     } : prj);
     setProjects(started);
   };
@@ -66,7 +65,6 @@ export default function Home() {
     const stopped = projects.map(prj => {
       if (prj.id === id && prj.durations.length > 0) {
         prj.durations[prj.durations.length - 1].end = new Date().toISOString().replace("/\.\d{3}Z$/", "");
-        prj.ongoing = false;
       }
       return prj;
     })
@@ -96,7 +94,7 @@ export default function Home() {
             projects.map(prj => {
               return (
                 <Project
-                  key={prj.id} id={prj.id} name={prj.name} durations={prj.durations} ongoing={prj.ongoing}
+                  key={prj.id} id={prj.id} name={prj.name} durations={prj.durations}
                   starter={starter} stopper={stopper} now={now} deleter={deleteProject}
                 />
               )
@@ -114,7 +112,6 @@ export default function Home() {
               id: nextID,
               name: inputProject,
               durations: [],
-              ongoing: false,
             }]);
             setInputProject("");
           }
@@ -157,15 +154,20 @@ function Project(props: {
   id: number,
   name: string,
   durations: { start: string, end: string | null }[],
-  ongoing: boolean,
   starter: (id: number) => void, stopper: (id: number) => void, deleter: (id: number) => void,
   now: Date,
 }) {
+  const [onGoing, setOnGoing] = useState(false);
+
+
+
   return (
     <div>
       <p>Task: {props.name}</p>
       <p>Total: {showTotalTime(calcTotalTime(props.durations, props.now))}</p>
-      <Toggle key={props.id} id={props.id} ongoing={props.ongoing} starter={props.starter} stopper={props.stopper} />
+      <Toggle key={props.id} id={props.id} ongoing={onGoing} 
+        starter={(id) => {if (!onGoing) {props.starter(id);setOnGoing(!onGoing);} }}
+        stopper={(id) => {if (onGoing) {props.stopper(id);setOnGoing(!onGoing);}}} />
       <button onClick={()=>props.deleter(props.id)}>delete</button>
     </div>
   )
