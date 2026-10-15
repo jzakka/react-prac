@@ -1,23 +1,21 @@
 "use client"
 
 import Image from "next/image";
-import { parse } from "path";
-import { useEffect, useState } from "react";
-import { start } from "repl";
+import { useCallback, useEffect, useState, memo } from "react";
 
 export default function Home() {
-  const [projects, setProjects] = useState<{ id: number, name: string, durations: { start: string, end: string | null }[]}[]>([
+  const [projects, setProjects] = useState<{ id: number, name: string, durations: { start: string, end: string | null }[], ongoing: boolean }[]>([
     {
       id: 1, name: "music", durations: [
         { start: "2026-10-01T20:00:01", end: "2026-10-01T21:00:03" },
         { start: "2026-10-02T20:00:01", end: "2026-10-02T21:00:03" },
         { start: "2026-10-02T22:30:01", end: "2026-10-02T23:00:50" },
-      ]
+      ], ongoing: false
     },
     {
       id: 2, name: "music input", durations: [
         { start: "2026-10-01T20:00:01", end: "2026-10-01T21:00:03" },
-      ]
+      ], ongoing: false
     },
   ]);
 
@@ -34,19 +32,16 @@ export default function Home() {
 
       // TODO: data validation
 
-      setProjects(parsed);
+      setProjects(parsed.map((prj: typeof projects[number]) => ({
+        ...prj,
+        ongoing: prj.durations.length > 0 && prj.durations[prj.durations.length - 1].end === null,
+      })));
     } catch (e) {
       console.log("invalid data: ", e)
     } finally {
       setIsLoaded(true)
     }
   }, []);
-
-  const [now, setNow] = useState(new Date());
-
-  setInterval(() => {
-    setNow(new Date());
-  }, 1000);
 
   useEffect(() => {
     if (!isLoaded) {
@@ -55,28 +50,37 @@ export default function Home() {
     localStorage.setItem("projects", JSON.stringify(projects));
   }, [projects, isLoaded]);
 
-  const starter = (id: number) => {
-    const started = projects.map(prj => prj.id === id ? {
-      id: prj.id, name: prj.name, durations: [...prj.durations, { start: new Date().toISOString().replace("/\.\d{3}Z$/", ""), end: null }],
+  const starter = useCallback((id: number) => {
+    const started = projects.map(prj => prj.id === id && !prj.ongoing ? {
+      ongoing: true, id: prj.id, name: prj.name, durations: [...prj.durations, { start: new Date().toISOString().replace("/\.\d{3}Z$/", ""), end: null }],
     } : prj);
     setProjects(started);
-  };
-  const stopper = (id: number) => {
+  }, [projects]);
+
+  const stopper = useCallback((id: number) => {
     const stopped = projects.map(prj => {
-      if (prj.id === id && prj.durations.length > 0) {
-        prj.durations[prj.durations.length - 1].end = new Date().toISOString().replace("/\.\d{3}Z$/", "");
+      if (prj.id === id && prj.ongoing && prj.durations.length > 0) {
+        return {
+          ...prj,
+          ongoing: false,
+          durations: prj.durations.map((duration, index) =>
+            index === prj.durations.length - 1
+              ? { ...duration, end: new Date().toISOString() }
+              : duration
+          ),
+        };
       }
       return prj;
     })
     setProjects(stopped);
-  };
+  }, [projects]);
 
   const [inputProject, setInputProject] = useState("");
 
-  const deleteProject = (id: number) => {
+  const deleteProject = useCallback((id: number) => {
     const deletedProjects = projects.filter(pr => pr.id != id);
     setProjects(deletedProjects);
-  };
+  }, [projects]);
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
@@ -94,8 +98,8 @@ export default function Home() {
             projects.map(prj => {
               return (
                 <Project
-                  key={prj.id} id={prj.id} name={prj.name} durations={prj.durations}
-                  starter={starter} stopper={stopper} now={now} deleter={deleteProject}
+                  key={prj.id} id={prj.id} name={prj.name} durations={prj.durations} ongoing={prj.ongoing}
+                  starter={starter} stopper={stopper} deleter={deleteProject}
                 />
               )
             })
@@ -112,6 +116,7 @@ export default function Home() {
               id: nextID,
               name: inputProject,
               durations: [],
+              ongoing: false,
             }]);
             setInputProject("");
           }
@@ -150,30 +155,37 @@ export default function Home() {
   );
 }
 
-function Project(props: {
+const Project = memo(function (props: {
   id: number,
   name: string,
   durations: { start: string, end: string | null }[],
+  ongoing: boolean,
   starter: (id: number) => void, stopper: (id: number) => void, deleter: (id: number) => void,
-  now: Date,
 }) {
-  const [onGoing, setOnGoing] = useState(false);
+  console.log(`project#${props.id} 가 렌더링.`);
+  const [now, setNow] = useState(new Date());
 
-
+  useEffect(()=> {
+    if (props.ongoing) {
+      setNow(new Date());
+      const timer = setInterval(() => setNow(new Date()), 1000);
+      return () => clearInterval(timer);
+    }
+  }, [props.ongoing])
 
   return (
     <div>
       <p>Task: {props.name}</p>
-      <p>Total: {showTotalTime(calcTotalTime(props.durations, props.now))}</p>
-      <Toggle key={props.id} id={props.id} ongoing={onGoing} 
-        starter={(id) => {if (!onGoing) {props.starter(id);setOnGoing(!onGoing);} }}
-        stopper={(id) => {if (onGoing) {props.stopper(id);setOnGoing(!onGoing);}}} />
+      <p>Total: {showTotalTime(calcTotalTime(props.durations, now))}</p>
+      <Toggle key={props.id} id={props.id} ongoing={props.ongoing}
+        starter={props.starter} stopper={props.stopper} />
       <button onClick={()=>props.deleter(props.id)}>delete</button>
     </div>
   )
-}
+});
 
 function Toggle(props: { id: number, ongoing: boolean, starter: (id: number) => void, stopper: (id: number) => void }) {
+  console.log(`  toggle#${props.id} 가 렌더링.`);
   if (props.ongoing) {
     return (
       <button onClick={() => props.stopper(props.id)}>STOP</button>
